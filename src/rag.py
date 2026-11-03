@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 from google import genai
 
 from search import search
-
+# Initial threshold; we will calibrate it using evaluation results.
+SIMILARITY_THRESHOLD = 0.50
 
 # Load environment variables
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -96,7 +97,7 @@ GROUNDED ANSWER:
 
 
 def answer_question(query, top_k=3, strategy="fixed"):
-    """Complete retrieval and answer-generation pipeline."""
+    """Retrieve relevant chunks and generate a grounded answer."""
 
     results = retrieve_context(
         query=query,
@@ -104,29 +105,42 @@ def answer_question(query, top_k=3, strategy="fixed"):
         strategy=strategy
     )
 
-    print("\nDEBUG: Retrieved results count:", len(results))
+    # Keep only chunks that meet the minimum similarity score.
+    relevant_results = [
+        result for result in results
+        if result["similarity_score"] >= SIMILARITY_THRESHOLD
+    ]
 
-    for index, result in enumerate(results, start=1):
-        print(f"\nDEBUG Result {index}:")
-        print("Text:", result["text"][:150])
-        print("Metadata:", result["metadata"])
-        print("Similarity:", result["similarity_score"])
+    print("\nDEBUG: Retrieved results:", len(results))
+    print("DEBUG: Relevant results:", len(relevant_results))
 
-    context = build_context(results)
+    # Refuse if no retrieved chunk is sufficiently relevant.
+    if not relevant_results:
+        return {
+            "question": query,
+            "answer": (
+                "I cannot answer this question because "
+                "the available documents do not contain "
+                "sufficiently relevant information."
+            ),
+            "sources": []
+        }
 
-    print("\nDEBUG: Context length:", len(context))
+    context = build_context(relevant_results)
 
-    answer = generate_answer(query=query, context=context)
+    answer = generate_answer(
+        query=query,
+        context=context
+    )
 
     return {
         "question": query,
         "answer": answer,
-        "sources": results
+        "sources": relevant_results
     }
 
 if __name__ == "__main__":
-
-    question = "What are foundation models?"
+    question = "What is the capital of Japan?"
 
     print("\n========== DOCUSENSE RAG ==========")
     print("Question:", question)
