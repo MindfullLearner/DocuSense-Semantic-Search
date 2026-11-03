@@ -1,22 +1,35 @@
-# DocuSense – Document Ingestion, Chunking & Semantic Search Pipeline
+# DocuSense – Document-Based Semantic Search & RAG Question Answering
 
-DocuSense is a Python-based semantic search system that extracts text from PDF documents, divides the text into chunks, generates embeddings, and stores them in ChromaDB.
+DocuSense is a Python-based document intelligence system that combines semantic search with Retrieval-Augmented Generation (RAG).
 
-It allows users to search across multiple documents using natural-language queries and retrieves the most relevant text chunks with similarity scores and source metadata.
+It extracts text from PDF documents, divides the text into chunks, generates semantic embeddings, and stores them in ChromaDB. Users can search across multiple documents using natural-language queries and retrieve relevant information with similarity scores and source metadata.
+
+The RAG pipeline extends semantic search by using Google Gemini to generate grounded answers from retrieved document context, with source citations and similarity-based refusal for irrelevant questions.
 
 ## Features
 
+### Document Processing
 - Extract text from multiple PDF documents using PyMuPDF.
-- Support two chunking strategies:
-  - Fixed-size chunking with overlap.
-  - Sentence-based chunking.
-- Generate text embeddings using Sentence Transformers.
+- Support fixed-size chunking with overlap.
+- Support sentence-based chunking.
+- Preserve source filename, page number, chunking strategy, and chunk index.
+
+### Semantic Search
+- Generate embeddings using Sentence Transformers.
 - Use the `all-MiniLM-L6-v2` embedding model (384 dimensions).
-- Store document embeddings and metadata in ChromaDB.
-- Perform semantic search using natural-language queries.
-- Retrieve top-k relevant results with cosine similarity scores.
-- Preserve source filename, page number, chunking strategy, and chunk index metadata.
-- Compare retrieval results across different chunking strategies.
+- Store embeddings and metadata in ChromaDB.
+- Perform natural-language semantic search.
+- Retrieve top-k relevant chunks with cosine similarity scores.
+- Compare retrieval results across chunking strategies.
+
+### Retrieval-Augmented Generation (RAG)
+- Retrieve relevant document chunks for user questions.
+- Construct structured context with numbered source references.
+- Generate grounded answers using Google Gemini.
+- Restrict answer generation to supplied document context.
+- Apply a configurable similarity threshold to filter irrelevant chunks.
+- Refuse questions when no retrieved chunks meet the threshold.
+- Validate generated citation labels against retrieved source references.
 
 ## Technologies Used
 
@@ -24,10 +37,13 @@ It allows users to search across multiple documents using natural-language queri
 |---|---|
 | Python | Main programming language |
 | PyMuPDF | PDF text extraction |
-| Sentence Transformers | Text embedding generation |
+| Sentence Transformers | Embedding generation |
 | all-MiniLM-L6-v2 | Pre-trained embedding model |
 | ChromaDB | Persistent vector database |
 | NumPy | Numerical operations |
+| Google Gemini API | Grounded answer generation |
+| google-genai | Gemini Python SDK |
+| python-dotenv | Environment variable management |
 
 ## Project Structure
 
@@ -43,14 +59,17 @@ DocuSense-Semantic-Search/
 │   ├── ingest.py
 │   ├── chunking.py
 │   ├── vector_store.py
-│   └── search.py
+│   ├── search.py
+│   └── rag.py
 │
-├── chroma_db/                 # Generated vector database
+├── chroma_db/                  # Generated vector database
+├── .env                        # Local API configuration (not committed)
+├── .env.example                # Environment variable template
 ├── .gitignore
-├── .env.example
 ├── requirements.txt
 ├── README.md
-└── CHUNKING_COMPARISON.md
+├── CHUNKING_COMPARISON.md
+└── EVAL_NOTES.md
 ```
 
 ## Installation
@@ -82,17 +101,33 @@ Activate it on Windows PowerShell:
 pip install -r requirements.txt
 ```
 
-### 4. Add PDF documents
+### 4. Configure Gemini API
+
+Create a `.env` file in the project root:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3.8-flash
+```
+
+Replace the placeholder with your own Gemini API key.
+
+**Important:** Never commit your `.env` file or expose your API key publicly. The `.env` file is excluded through `.gitignore`.
+
+### 5. Add PDF documents
 
 Place your PDF files inside the `documents/` directory.
 
-The project currently uses three example documents related to Google Generative AI, NIST Generative AI risk management, and Stanford foundation models.
+The project currently uses three example documents related to:
+- Google Generative AI
+- NIST Generative AI Risk Management
+- Stanford Foundation Models
 
 ## How to Run
 
-### Step 1: Generate embeddings and populate ChromaDB
+Run all commands from the project root.
 
-Run the following command from the project root:
+### Step 1: Generate embeddings and populate ChromaDB
 
 ```bash
 python .\src\vector_store.py
@@ -100,12 +135,12 @@ python .\src\vector_store.py
 
 This process:
 
-1. Extracts text from the PDF documents.
+1. Extracts text from PDF documents.
 2. Generates fixed-size and sentence-based chunks.
 3. Generates embeddings using Sentence Transformers.
-4. Stores the chunks and metadata in two separate ChromaDB collections.
+4. Stores chunks and metadata in separate ChromaDB collections.
 
-The generated collections are:
+Generated collections:
 
 - `documents_fixed`
 - `documents_sentence`
@@ -122,14 +157,30 @@ The default example searches for:
 What are foundation models?
 ```
 
-It retrieves the top three matching chunks from the fixed-size collection.
+It retrieves the top matching chunks from the fixed-size collection.
 
-### Step 3: Use the search function
+### Step 3: Run the RAG question-answering pipeline
 
-The search function can also be imported into another Python script:
+```bash
+python .\src\rag.py
+```
+
+The RAG pipeline:
+
+1. Receives a natural-language question.
+2. Retrieves the top-k relevant document chunks.
+3. Filters chunks using the configured similarity threshold.
+4. Constructs context with numbered source references.
+5. Sends the question and context to Google Gemini.
+6. Generates a grounded answer.
+7. Validates generated citation labels.
+8. Displays the answer and retrieved source metadata.
+
+### Step 4: Use the search function in another Python script
 
 ```python
 import sys
+
 sys.path.insert(0, "src")
 
 from search import search
@@ -152,41 +203,85 @@ Available strategies:
 - `fixed`
 - `sentence`
 
-The `top_k` parameter controls how many relevant chunks are returned.
+The `top_k` parameter controls how many relevant chunks are retrieved.
 
-## Semantic Search Workflow
+## RAG Architecture
 
 ```text
-PDF Documents
-      |
-      v
-Text Extraction (PyMuPDF)
-      |
-      v
-Text Chunking
-   /       \
-Fixed     Sentence
-   \       /
-      |
-      v
-Embedding Generation
-(Sentence Transformers)
-      |
-      v
-ChromaDB Vector Storage
-      |
-      v
-User Search Query
+User Question
       |
       v
 Query Embedding
       |
       v
-Similarity Search
+ChromaDB Semantic Search
       |
       v
-Top-K Relevant Results
+Retrieve Top-K Chunks
+      |
+      v
+Similarity Threshold Filtering
+      |
+      +----------------------+
+      |                      |
+      v                      v
+Relevant Chunks         No Relevant Chunks
+      |                      |
+      v                      v
+Build Context            Refuse Answer
+with Citations
+      |
+      v
+Google Gemini
+      |
+      v
+Grounded Answer
+      |
+      v
+Citation Validation
+      |
+      v
+Answer + Source References
 ```
+
+## Similarity Threshold and Refusal
+
+DocuSense uses a configurable similarity threshold:
+
+```python
+SIMILARITY_THRESHOLD = 0.50
+```
+
+Retrieved chunks below this threshold are excluded from the context.
+
+If no retrieved chunks meet the threshold, the system refuses to answer rather than passing irrelevant information to Gemini.
+
+The current threshold is an initial value evaluated using four test questions. It is not a universally optimal threshold.
+
+## Citation Validation
+
+Retrieved chunks are assigned numbered reference labels such as `[1]`, `[2]`, and `[3]`.
+
+Gemini is instructed to use these references when supporting its answer.
+
+DocuSense validates generated citation labels against the available retrieved source references. Answers containing invalid citation numbers are not accepted.
+
+This validation checks reference existence, not whether every citation semantically supports its associated statement.
+
+## Evaluation
+
+The RAG pipeline was evaluated using two in-domain and two out-of-domain questions.
+
+| Question | Category | Observed Result |
+|---|---|---|
+| What are foundation models? | In-domain | Grounded answer generated |
+| What risks are associated with generative AI? | In-domain | Relevant answer generated |
+| Who won the FIFA World Cup in 2018? | Out-of-domain | Correct refusal |
+| What is the capital of Japan? | Out-of-domain | Correct refusal |
+
+The evaluation demonstrated that the system can retrieve relevant information, generate context-based answers, and refuse questions when no retrieved chunks meet the configured threshold.
+
+For detailed test outputs, retrieved sources, and observations, see `EVAL_NOTES.md`.
 
 ## Chunking Strategy Comparison
 
@@ -197,29 +292,34 @@ Two chunking strategies were evaluated using three search queries.
 | Fixed-size | 2,422 |
 | Sentence-based | 2,577 |
 
-The comparison evaluated retrieval relevance, similarity scores, and the context of retrieved chunks.
+The comparison evaluated retrieval relevance, similarity scores, and retrieved chunk context.
 
-For detailed experimental results and observations, see [CHUNKING_COMPARISON.md](CHUNKING_COMPARISON.md).
+For detailed experimental results, see `CHUNKING_COMPARISON.md`.
 
 ## Similarity Scores
 
 ChromaDB uses cosine distance for similarity search.
 
-The implementation converts cosine distance into cosine similarity using:
+The implementation converts cosine distance into cosine similarity:
 
 ```python
 similarity = 1 - distance
 ```
 
-A higher similarity score indicates that the retrieved chunk is closer to the query in the embedding space. Similarity scores are not probabilities.
+A higher similarity score indicates that the retrieved chunk is closer to the query in embedding space.
 
-## Notes
+Similarity scores are not probabilities.
+
+## Notes and Limitations
 
 - The embedding model is downloaded and loaded locally through Sentence Transformers.
-- An internet connection may be required the first time the model is downloaded.
-- ChromaDB stores its generated data in the local `chroma_db/` directory.
-- The vector database is excluded from Git using `.gitignore` and can be regenerated by running the ingestion pipeline.
-- No Gemini API key is required.
+- An internet connection may be required when downloading the embedding model for the first time.
+- ChromaDB stores generated data in the local `chroma_db/` directory.
+- The vector database is excluded from Git and can be regenerated through the ingestion pipeline.
+- Gemini API access is required for RAG answer generation.
+- Semantic similarity alone does not guarantee that retrieved context contains a complete answer.
+- Citation-label validation does not independently verify factual support.
+- The current similarity threshold is an initial value and may require further evaluation.
 
 ## Author
 
