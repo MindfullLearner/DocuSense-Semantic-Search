@@ -24,7 +24,6 @@ def search(query, top_k=5, strategy="fixed"):
     collection = get_collection(strategy)
 
     total_records = collection.count()
-    print(f"DEBUG: Strategy={strategy}, Collection records={total_records}")
 
     if total_records == 0:
         return []

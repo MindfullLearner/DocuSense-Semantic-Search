@@ -1,13 +1,17 @@
 
 import os
+import re
+
 from dotenv import load_dotenv
 from google import genai
 
 from search import search
-# Initial threshold; we will calibrate it using evaluation results.
+
+
+# Initial threshold; calibrated using the current evaluation set.
 SIMILARITY_THRESHOLD = 0.50
 
-# Load environment variables
+# Project configuration
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
@@ -22,18 +26,15 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 def retrieve_context(query, top_k=5, strategy="fixed"):
     """Retrieve relevant document chunks."""
-
-    results = search(
+    return search(
         query=query,
         top_k=top_k,
         strategy=strategy
     )
 
-    return results
-
 
 def build_context(results):
-    """Construct context with source citation labels."""
+    """Construct context with numbered source references."""
 
     if not results:
         return ""
@@ -57,7 +58,7 @@ def build_context(results):
 
 
 def generate_answer(query, context):
-    """Generate an answer using only the supplied context."""
+    """Generate an answer grounded only in supplied context."""
 
     if not context.strip():
         return "I cannot answer because no relevant context was retrieved."
@@ -66,15 +67,14 @@ def generate_answer(query, context):
 You are DocuSense, a document-based question-answering assistant.
 
 STRICT INSTRUCTIONS:
-1. Answer the user's question using ONLY the supplied context.
+1. Answer using ONLY the supplied context.
 2. Do not use outside knowledge or assumptions.
 3. Do not invent facts or citations.
-4. If the context does not contain enough information,
-   clearly say that the available documents do not provide
-   sufficient information.
+4. If the context is insufficient, clearly say so.
 5. Keep the answer clear and relevant.
-6. Cite supporting sources using their reference labels,
-   such as [1] or [2].
+6. Cite supporting information using only the provided
+   reference labels, such as [1] or [2].
+7. Do not cite a source unless it supports the statement.
 
 SUPPLIED CONTEXT:
 {context}
@@ -96,8 +96,24 @@ GROUNDED ANSWER:
     return response.text.strip()
 
 
+def validate_citations(answer, source_count):
+    """Check whether generated citation labels exist."""
+
+    cited_labels = re.findall(r"\[(\d+)\]", answer)
+
+    invalid_labels = [
+        label for label in cited_labels
+        if int(label) < 1 or int(label) > source_count
+    ]
+
+    return {
+        "valid": len(invalid_labels) == 0,
+        "invalid_labels": invalid_labels
+    }
+
+
 def answer_question(query, top_k=3, strategy="fixed"):
-    """Retrieve relevant chunks and generate a grounded answer."""
+    """Complete grounded RAG pipeline with citation validation."""
 
     results = retrieve_context(
         query=query,
@@ -105,16 +121,11 @@ def answer_question(query, top_k=3, strategy="fixed"):
         strategy=strategy
     )
 
-    # Keep only chunks that meet the minimum similarity score.
     relevant_results = [
         result for result in results
         if result["similarity_score"] >= SIMILARITY_THRESHOLD
     ]
 
-    print("\nDEBUG: Retrieved results:", len(results))
-    print("DEBUG: Relevant results:", len(relevant_results))
-
-    # Refuse if no retrieved chunk is sufficiently relevant.
     if not relevant_results:
         return {
             "question": query,
@@ -123,7 +134,9 @@ def answer_question(query, top_k=3, strategy="fixed"):
                 "the available documents do not contain "
                 "sufficiently relevant information."
             ),
-            "sources": []
+            "sources": [],
+            "citation_validation": None,
+            "refused": True
         }
 
     context = build_context(relevant_results)
@@ -133,17 +146,29 @@ def answer_question(query, top_k=3, strategy="fixed"):
         context=context
     )
 
+    citation_check = validate_citations(
+        answer=answer,
+        source_count=len(relevant_results)
+    )
+
+    if not citation_check["valid"]:
+        answer = (
+            "The generated answer contained invalid source "
+            "references and was not accepted. Please try again."
+        )
+
     return {
         "question": query,
         "answer": answer,
-        "sources": relevant_results
+        "sources": relevant_results,
+        "citation_validation": citation_check,
+        "refused": False
     }
 
-if __name__ == "__main__":
-    question = "What is the capital of Japan?"
 
-    print("\n========== DOCUSENSE RAG ==========")
-    print("Question:", question)
+if __name__ == "__main__":
+
+    question = "What are foundation models?"
 
     result = answer_question(
         query=question,
@@ -151,8 +176,14 @@ if __name__ == "__main__":
         strategy="fixed"
     )
 
+    print("\n========== DOCUSENSE RAG ==========")
+    print("Question:", result["question"])
+
     print("\n========== GENERATED ANSWER ==========")
     print(result["answer"])
+
+    print("\n========== CITATION VALIDATION ==========")
+    print(result["citation_validation"])
 
     print("\n========== RETRIEVED SOURCES ==========")
 
