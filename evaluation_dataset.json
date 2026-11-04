@@ -1,0 +1,43 @@
+
+[
+  {
+    "question": "What is generative AI?",
+    "reference": "Generative AI is a type of artificial intelligence that can create new content and ideas."
+  },
+  {
+    "question": "What is prompt engineering?",
+    "reference": "Prompt engineering is the art and science of creating effective inputs, called prompts, to maximize the value of generative AI models and tailor their responses to specific needs."
+  },
+  {
+    "question": "What are multimodal generative AI applications?",
+    "reference": "Multimodal generative AI applications can process and generate different types of data, including text, images, and code."
+  },
+  {
+    "question": "What capabilities does generative AI provide?",
+    "reference": "Generative AI can automate previously manual tasks, create new content, discover information, and summarize information into concise summaries."
+  },
+  {
+    "question": "What is the purpose of the NIST Generative AI Profile?",
+    "reference": "The NIST Generative AI Profile helps organizations manage generative AI risks in ways aligned with their goals, risk tolerance, resources, and applicable requirements."
+  },
+  {
+    "question": "What are the four functions of the NIST AI Risk Management Framework?",
+    "reference": "The four functions are Govern, Map, Measure, and Manage."
+  },
+  {
+    "question": "What risks are associated with generative AI according to the NIST profile?",
+    "reference": "The NIST Generative AI Profile addresses risks that are novel to or exacerbated by generative AI and provides suggested actions to help organizations govern, map, measure, and manage these risks."
+  },
+  {
+    "question": "How are foundation models trained?",
+    "reference": "Foundation models are trained across vast and usually highly diverse datasets that may span multiple domains and modalities. Through this training, they learn a wide range of behaviors."
+  },
+  {
+    "question": "Why is evaluating foundation models difficult?",
+    "reference": "Foundation models are intermediary assets that must often be adapted or specialized for particular tasks. Therefore, standard evaluation approaches need to be changed to support their understanding and comparison."
+  },
+  {
+    "question": "What economic risks can foundation models create?",
+    "reference": "Foundation models may increase living standards, but they also pose economic risks such as increasing inequality and concentrating power."
+  }
+]
